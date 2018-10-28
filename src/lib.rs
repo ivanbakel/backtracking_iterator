@@ -86,6 +86,47 @@ impl<I> BacktrackingIterator<I> where I:Iterator {
   pub fn forget(&mut self) {
     self.backtracking_vec.clear();
   }
+
+  /// Produce an iterator which goes back over the current history in reverse,
+  /// and yields references to items in the history.
+  /// ```
+  /// extern crate backtracking_iterator;
+  /// use backtracking_iterator::BacktrackingIterator;
+  ///
+  /// let v = vec![1_u8, 2_u8];
+  /// let mut bt = BacktrackingIterator::new(v.into_iter());
+  /// bt.next();
+  ///
+  /// let mut wb = bt.walk_back();
+  ///
+  /// assert!(wb.next().unwrap() == &1_u8);
+  /// ```
+  pub fn walk_back(&self) -> Walkback<I> {
+    Walkback::new(self)
+  }
+
+  /// Restart this iterator, backtracking from the given position in the backwalk.
+  /// Has no expected behaviour if you don't do the sensible thing i.e. get this `usize`
+  /// from a `Walkback`.
+  /// ```
+  /// extern crate backtracking_iterator;
+  /// use backtracking_iterator::BacktrackingIterator;
+  ///
+  /// let v = vec![1_u8, 2_u8, 3_u8];
+  /// let mut bt = BacktrackingIterator::new(v.into_iter());
+  /// bt.next(); // 1_u8
+  /// bt.next(); // 2_u8
+  /// let wb_pos = {
+  ///   let mut wb = bt.walk_back();
+  ///   assert!(wb.next().unwrap() == &2_u8);
+  ///   wb.history_position()
+  /// };
+  /// 
+  /// bt.go_from(wb_pos);
+  /// assert!(bt.next().unwrap() == 2_u8);
+  pub fn go_from(&mut self, start_from: usize) {
+    self.state = Backtracking { position: start_from };
+  }
 }
 
 /// In order to be able to backtrack, the iterator values must be `Clone`able
@@ -120,6 +161,45 @@ impl<I> Iterator for BacktrackingIterator<I> where I: Iterator, I::Item: Clone {
   }
 }
 
+/// A backwalk through a `BacktrackingIterator`'s history. Yields references
+/// to items in the history, and can be used to walk back to a desired point.
+/// The current position is before the most-recently-yielded element. To restart
+/// a `BacktrackingIterator` at the current position of the backwalk, use the
+/// `history_position()` method.
+pub struct Walkback<'history, I> where I: Iterator {
+  backtracker: &'history BacktrackingIterator<I>,
+  reverse_position: usize,
+}
+
+impl<'history, I> Walkback<'history, I> where I: Iterator {
+  fn new(backtracker: &'history BacktrackingIterator<I>) -> Self {
+    let history_len = backtracker.backtracking_vec.len();
+    Walkback {
+      backtracker: &backtracker,
+      reverse_position: history_len,
+    }
+  }
+
+  pub fn history_position(&self) -> usize {
+    self.reverse_position
+  }
+}
+
+impl<'history, I> Iterator for Walkback<'history, I> where I: Iterator {
+  type Item = &'history I::Item;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.reverse_position == 0 {
+      None
+    } else {
+      let new_position = self.reverse_position - 1_usize;
+      let val = &self.backtracker.backtracking_vec[new_position];
+      self.reverse_position = new_position;
+      Some(val)
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   #[test]
@@ -146,5 +226,22 @@ mod tests {
 
     bt_iter.backtrack();
     assert!(bt_iter.next().unwrap() == 3_u8);
+  }
+
+  #[test]
+  fn backwalk_test() {
+    use crate::{BacktrackingIterator};
+    let num_vec = vec![1_u8, 2, 3, 4, 5, 6];
+    let vec_iter = num_vec.into_iter();
+    let mut bt_iter = BacktrackingIterator::new(vec_iter);
+
+    for _ in 1..=6 {
+        bt_iter.next();
+    }
+
+    let mut wb = bt_iter.walk_back();
+    for i in 1_u8..=6 {
+      assert!(wb.next().unwrap() == &(7 - i));
+    }
   }
 }
