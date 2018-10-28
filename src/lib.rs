@@ -50,6 +50,14 @@ impl<I> BacktrackingIterator<I> where I:Iterator {
     }
   }
 
+  /// Give the current position in the history, as a usize.
+  pub fn history_position(&self) -> usize {
+    match self.state {
+        Progressing => self.backtracking_vec.len(),
+        Backtracking { position } => position,
+    }
+  }
+
   /// Start the iterator again from all the elements in the current history
   /// The iterator will repeat every element which was emitted since the last
   /// call to `forget()`.
