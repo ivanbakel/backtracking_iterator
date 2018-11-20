@@ -1,7 +1,7 @@
 [package]
 name = "backtracking_iterator"
 description = "A simple implementation of a generic iterator with an item history, capable of backtracking and forgetting."
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Isaac van Bakel <ivb@vanbakel.io>"]
 edition = "2018"
 
