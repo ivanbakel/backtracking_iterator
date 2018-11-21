@@ -45,6 +45,14 @@ pub fn copying<I>(iterator: I) -> CopyingBacktrackingIterator<I> where I: Iterat
   CopyingBacktrackingIterator::new(iterator)
 }
 
+mod referencing;
+pub use self::referencing::*;
+
+pub fn referencing<Iter>(iterator: Iter) -> BacktrackingRecorder<Iter>
+  where Iter: Iterator {
+  BacktrackingRecorder::new(iterator)
+}
+
 #[cfg(test)]
 mod tests {
   #[test]
