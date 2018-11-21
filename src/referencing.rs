@@ -40,13 +40,13 @@ impl<Iter> BacktrackingRecorder<Iter> where Iter: Iterator {
 
   pub fn record<'backtrack>(&'backtrack mut self) -> ReferencingBacktrackingIterator<'backtrack, Iter> {
     ReferencingBacktrackingIterator {
-      backtracker: self,
+      recorder: self,
     }
   }
 }
 
 pub struct ReferencingBacktrackingIterator<'backtrack, Iter> where Iter: Iterator {
-  backtracker : &'backtrack mut BacktrackingRecorder<Iter>,
+  recorder: &'backtrack mut BacktrackingRecorder<Iter>,
 }
 
 impl<'backtrack, Iter> Iterator for ReferencingBacktrackingIterator<'backtrack, Iter> where Iter: Iterator {
@@ -60,28 +60,28 @@ impl<'backtrack, Iter> Iterator for ReferencingBacktrackingIterator<'backtrack, 
     macro_rules! unsafe_backtracking_index {
       ($index:expr) => {
         unsafe {
-          &*(&self.backtracker.backtracking_vec[$index] as *const Iter::Item)
+          &*(&self.recorder.backtracking_vec[$index] as *const Iter::Item)
         }
       };
     }
 
     use crate::{Backtracking, Progressing};
-    match self.backtracker.state {
+    match self.recorder.state {
       Progressing => {
-        if let Some(val) = self.backtracker.iterator.next() {
-          self.backtracker.backtracking_vec.push(val);
-          Some(unsafe_backtracking_index!(self.backtracker.backtracking_vec.len() - 1))
+        if let Some(val) = self.recorder.iterator.next() {
+          self.recorder.backtracking_vec.push(val);
+          Some(unsafe_backtracking_index!(self.recorder.backtracking_vec.len() - 1))
         } else {
           None
         }
       },
       Backtracking { position } => {
-        if position >= self.backtracker.backtracking_vec.len() {
-          self.backtracker.state = Progressing;
+        if position >= self.recorder.backtracking_vec.len() {
+          self.recorder.state = Progressing;
           self.next()
         } else {
           let new_position = position + 1;
-          self.backtracker.state = Backtracking { position: new_position };
+          self.recorder.state = Backtracking { position: new_position };
           Some(unsafe_backtracking_index!(position))
         }
       },
@@ -95,8 +95,8 @@ impl<'backtrack, Iter> BacktrackingIterator for ReferencingBacktrackingIterator<
   type RefPoint = usize;
 
   fn get_ref_point(&self) -> usize {
-    match self.backtracker.state {
-        Progressing => self.backtracker.backtracking_vec.len(),
+    match self.recorder.state {
+        Progressing => self.recorder.backtracking_vec.len(),
         Backtracking { position } => position,
     }
   }
@@ -107,20 +107,20 @@ impl<'backtrack, Iter> BacktrackingIterator for ReferencingBacktrackingIterator<
   }
 
   fn backtrack(&mut self, position: usize) {
-    self.backtracker.state = Backtracking { position };
+    self.recorder.state = Backtracking { position };
   }
 
   fn forget_before(&mut self, position: usize) {
-    if position <= self.backtracker.backtracking_vec.len() {
+    if position <= self.recorder.backtracking_vec.len() {
       //Split the history at the given point
-      let kept = self.backtracker.backtracking_vec.split_off(position);
+      let kept = self.recorder.backtracking_vec.split_off(position);
       //Keep the second half
-      self.backtracker.backtracking_vec = kept;
+      self.recorder.backtracking_vec = kept;
     }
   }
 
   fn forget(&mut self) {
-    self.backtracker.backtracking_vec.clear();
+    self.recorder.backtracking_vec.clear();
   }
 }
 
@@ -144,9 +144,9 @@ pub struct ReferencingWalkback<'backtrack, Iter> where Iter: Iterator, Iter::Ite
 impl<'backtrack, Iter> ReferencingWalkback<'backtrack, Iter> 
   where Iter: Iterator, Iter::Item: Clone {
   fn new<'history>(backtracker: &'history ReferencingBacktrackingIterator<'backtrack, Iter>) -> Self where 'history : 'backtrack {
-    let history_len = backtracker.backtracker.backtracking_vec.len();
+    let history_len = backtracker.recorder.backtracking_vec.len();
     ReferencingWalkback {
-      backtracker: backtracker.backtracker,
+      backtracker: backtracker.recorder,
       reverse_position: history_len,
     }
   }
