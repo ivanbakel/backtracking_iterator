@@ -78,7 +78,7 @@ mod tests {
 
   #[test]
   fn backwalk_test() {
-    use crate::{BacktrackingIterator, Walkbackable};
+    use crate::{Walkbackable};
     let num_vec = vec![1_u8, 2, 3, 4, 5, 6];
     let vec_iter = num_vec.into_iter();
     let mut bt_rec = crate::BacktrackingRecorder::new(vec_iter);

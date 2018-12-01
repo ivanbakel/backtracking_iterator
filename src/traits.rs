@@ -40,7 +40,8 @@ pub trait BacktrackingIterator: Iterator {
   /// use backtracking_iterator::{BacktrackingIterator, Walkback, Walkbackable};
   ///
   /// let v = vec![1_u8, 2_u8, 3_u8];
-  /// let mut bt = backtracking_iterator::copying(v.into_iter());
+  /// let mut rec = backtracking_iterator::BacktrackingRecorder::new(v.into_iter());
+  /// let mut bt = rec.copying();
   /// bt.next(); // 1_u8
   /// bt.next(); // 2_u8
   /// let wb_pos = {
@@ -62,7 +63,8 @@ pub trait BacktrackingIterator: Iterator {
   /// use backtracking_iterator::BacktrackingIterator;
   ///
   /// let v = vec![1_u8, 2_u8];
-  /// let mut bt = backtracking_iterator::copying(v.into_iter());
+  /// let mut rec = backtracking_iterator::BacktrackingRecorder::new(v.into_iter());
+  /// let mut bt = rec.copying();
   /// bt.next();
   /// bt.start_again();
   /// assert!(bt.next().unwrap() == 1_u8);
@@ -81,7 +83,8 @@ pub trait BacktrackingIterator: Iterator {
   /// use backtracking_iterator::BacktrackingIterator;
   ///
   /// let v = vec![1_u8, 2_u8];
-  /// let mut bt = backtracking_iterator::copying(v.into_iter());
+  /// let mut rec = backtracking_iterator::BacktrackingRecorder::new(v.into_iter());
+  /// let mut bt = rec.copying();
   /// bt.next();
   ///
   /// //Before we call this, 1_u8 is in the history
@@ -113,7 +116,8 @@ pub trait Walkbackable<'history> {
   /// use backtracking_iterator::{BacktrackingIterator, Walkbackable};
   ///
   /// let v = vec![1_u8, 2_u8];
-  /// let mut bt = backtracking_iterator::copying(v.into_iter());
+  /// let mut rec = backtracking_iterator::BacktrackingRecorder::new(v.into_iter());
+  /// let mut bt = rec.copying();
   /// bt.next();
   ///
   /// let mut wb = bt.walk_back();
