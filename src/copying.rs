@@ -19,41 +19,39 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use super::BacktrackingState;
+use super::BacktrackingRecorder;
 use super::BacktrackingState::*;
 
 /// A wrapper around an existing iterator to extend it with backtracking functionality
-pub struct CopyingBacktrackingIterator<I> where I: Iterator, I::Item: Clone {
-  iterator: I,
-  backtracking_vec: Vec<I::Item>,
-  state: BacktrackingState,
+pub struct CopyingBacktrackingIterator<'record, I> where I: Iterator, I::Item: Clone {
+  recorder: &'record mut BacktrackingRecorder<I>,
 }
 
 /// In order to be able to backtrack, the iterator values must be `Clone`able
 /// The reason for this is simple - the value will both be owned by the caller,
 /// and stored in the history to be repeated later.
-impl<I> Iterator for CopyingBacktrackingIterator<I> where I: Iterator, I::Item: Clone {
+impl<'record, I> Iterator for CopyingBacktrackingIterator<'record, I> where I: Iterator, I::Item: Clone {
   type Item = I::Item;
 
   fn next(&mut self) -> Option<Self::Item> {
     use crate::{Backtracking, Progressing};
-    match self.state {
+    match self.recorder.state {
       Progressing => {
-        if let Some(val) = self.iterator.next() {
-          self.backtracking_vec.push(val.clone());
+        if let Some(val) = self.recorder.iterator.next() {
+          self.recorder.backtracking_vec.push(val.clone());
           Some(val)
         } else {
           None
         }
       },
       Backtracking { position } => {
-        if position >= self.backtracking_vec.len() {
-          self.state = Progressing;
+        if position >= self.recorder.backtracking_vec.len() {
+          self.recorder.state = Progressing;
           self.next()
         } else {
-          let backtracked_value = self.backtracking_vec[position].clone();
+          let backtracked_value = self.recorder.backtracking_vec[position].clone();
           let new_position = position + 1;
-          self.state = Backtracking { position: new_position };
+          self.recorder.state = Backtracking { position: new_position };
           Some(backtracked_value)
         }
       },
@@ -61,25 +59,23 @@ impl<I> Iterator for CopyingBacktrackingIterator<I> where I: Iterator, I::Item: 
   }
 }
 
-impl<I> CopyingBacktrackingIterator<I> where I:Iterator, I::Item: Clone {
+impl<'record, I> CopyingBacktrackingIterator<'record, I> where I:Iterator, I::Item: Clone {
   /// Create a `CopyingBacktrackingIterator` from an existing iterator.
-  pub fn new(iterator: I) -> Self {
+  pub(crate) fn new(recorder: &'record mut BacktrackingRecorder<I>) -> Self {
     CopyingBacktrackingIterator {
-      iterator,
-      backtracking_vec: vec![],
-      state: Progressing,
+      recorder,
     }
   }
 }
 
 use super::BacktrackingIterator;
 
-impl<I> BacktrackingIterator for CopyingBacktrackingIterator<I> where I:Iterator, I::Item: Clone {
+impl<'record, I> BacktrackingIterator for CopyingBacktrackingIterator<'record, I> where I:Iterator, I::Item: Clone {
   type RefPoint = usize;
 
   fn get_ref_point(&self) -> usize {
-    match self.state {
-        Progressing => self.backtracking_vec.len(),
+    match self.recorder.state {
+        Progressing => self.recorder.backtracking_vec.len(),
         Backtracking { position } => position,
     }
   }
@@ -90,26 +86,27 @@ impl<I> BacktrackingIterator for CopyingBacktrackingIterator<I> where I:Iterator
   }
 
   fn backtrack(&mut self, position: usize) {
-    self.state = Backtracking { position };
+    self.recorder.state = Backtracking { position };
   }
 
   fn forget_before(&mut self, position: usize) {
-    if position <= self.backtracking_vec.len() {
+    if position <= self.recorder.backtracking_vec.len() {
       //Split the history at the given point
-      let kept = self.backtracking_vec.split_off(position);
+      let kept = self.recorder.backtracking_vec.split_off(position);
       //Keep the second half
-      self.backtracking_vec = kept;
+      self.recorder.backtracking_vec = kept;
     }
   }
 
   fn forget(&mut self) {
-    self.backtracking_vec.clear();
+    self.recorder.backtracking_vec.clear();
   }
 }
 
 use super::Walkbackable;
 
-impl<'history, I: 'history> Walkbackable<'history> for CopyingBacktrackingIterator<I> where I: Iterator, I::Item: Clone {
+impl<'history, 'record, I: 'history> Walkbackable<'history> for CopyingBacktrackingIterator<'record, I> 
+  where I: Iterator, I::Item: Clone, 'history : 'record {
   type RefPoint = usize;
   type Item = I::Item;
   type Walkback = CopyingWalkback<'history, I>;
@@ -124,16 +121,16 @@ impl<'history, I: 'history> Walkbackable<'history> for CopyingBacktrackingIterat
 /// The current position is before the most-recently-yielded element. To restart
 /// a `BacktrackingIterator` at the current position of the backwalk, use the
 /// `history_position()` method.
-pub struct CopyingWalkback<'history, I> where I: Iterator, I::Item: Clone {
-  backtracker: &'history CopyingBacktrackingIterator<I>,
+pub struct CopyingWalkback<'record, I> where I: Iterator, I::Item: Clone {
+  backtracker: &'record BacktrackingRecorder<I>,
   reverse_position: usize,
 }
 
 impl<'history, I> CopyingWalkback<'history, I> where I: Iterator, I::Item: Clone {
   fn new(backtracker: &'history CopyingBacktrackingIterator<I>) -> Self {
-    let history_len = backtracker.backtracking_vec.len();
+    let history_len = backtracker.recorder.backtracking_vec.len();
     CopyingWalkback {
-      backtracker: &backtracker,
+      backtracker: &backtracker.recorder,
       reverse_position: history_len,
     }
   }

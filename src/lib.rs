@@ -37,21 +37,15 @@ pub(crate) enum BacktrackingState {
 }
 use crate::BacktrackingState::*;
 
+mod record;
+pub use self::record::*;
+
 /// The copying backtracking iterator module
 mod copying;
 pub use self::copying::*;
 
-pub fn copying<I>(iterator: I) -> CopyingBacktrackingIterator<I> where I: Iterator, I::Item: Clone {
-  CopyingBacktrackingIterator::new(iterator)
-}
-
 mod referencing;
 pub use self::referencing::*;
-
-pub fn referencing<Iter>(iterator: Iter) -> BacktrackingRecorder<Iter>
-  where Iter: Iterator {
-  BacktrackingRecorder::new(iterator)
-}
 
 #[cfg(test)]
 mod tests {
@@ -61,7 +55,8 @@ mod tests {
 
     let num_vec = vec![1_u8, 2, 3, 4, 5, 6];
     let vec_iter = num_vec.into_iter();
-    let mut bt_iter = crate::copying(vec_iter);
+    let mut bt_rec = crate::BacktrackingRecorder::new(vec_iter);
+    let mut bt_iter = bt_rec.copying();
     assert!(bt_iter.next().unwrap() == 1_u8);
     assert!(bt_iter.next().unwrap() == 2_u8);
 
@@ -86,7 +81,8 @@ mod tests {
     use crate::{BacktrackingIterator, Walkbackable};
     let num_vec = vec![1_u8, 2, 3, 4, 5, 6];
     let vec_iter = num_vec.into_iter();
-    let mut bt_iter = crate::copying(vec_iter);
+    let mut bt_rec = crate::BacktrackingRecorder::new(vec_iter);
+    let mut bt_iter = bt_rec.copying();
 
     for _ in 1..=6 {
         bt_iter.next();

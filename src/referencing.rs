@@ -19,37 +19,22 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use super::BacktrackingState;
+use super::BacktrackingRecorder;
 use super::BacktrackingState::*;
-
-pub struct BacktrackingRecorder<Iter> where Iter: Iterator {
-  iterator: Iter,
-  backtracking_vec: Vec<Iter::Item>,
-  state: BacktrackingState,
-}
-
-impl<Iter> BacktrackingRecorder<Iter> where Iter: Iterator {
-  /// Create a `BacktrackingRecorder` from an existing iterator.
-  pub fn new(iterator: Iter) -> Self {
-    BacktrackingRecorder {
-      iterator,
-      backtracking_vec: vec![],
-      state: Progressing,
-    }
-  }
-
-  pub fn record<'record>(&'record mut self) -> ReferencingBacktrackingIterator<'record, Iter> {
-    ReferencingBacktrackingIterator {
-      recorder: self,
-    }
-  }
-}
 
 pub struct ReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator {
   recorder: &'record mut BacktrackingRecorder<Iter>,
 }
 
-impl<'record, Iter> Iterator for ReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator {
+impl<'record, Iter> ReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator {
+  pub(crate) fn new(recorder: &'record mut BacktrackingRecorder<Iter>) -> Self {
+    ReferencingBacktrackingIterator {
+      recorder,
+    }
+  }
+}
+
+impl<'record, Iter> Iterator for ReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator, Iter::Item: 'record {
   type Item = &'record Iter::Item;
 
   fn next(&mut self) -> Option<&'record Iter::Item> {
@@ -126,7 +111,7 @@ impl<'record, Iter> BacktrackingIterator for ReferencingBacktrackingIterator<'re
 
 use super::Walkbackable;
 
-impl<'history, 'record, Iter: 'history> Walkbackable<'history> for ReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator, Iter::Item: Clone, 'history : 'record {
+impl<'history, 'record, Iter: 'history> Walkbackable<'history> for ReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator, 'history : 'record {
   type RefPoint = usize;
   type Item = &'record Iter::Item;
   type Walkback = ReferencingWalkback<'record, Iter>;
@@ -136,13 +121,13 @@ impl<'history, 'record, Iter: 'history> Walkbackable<'history> for ReferencingBa
   }
 }
 
-pub struct ReferencingWalkback<'record, Iter> where Iter: Iterator, Iter::Item: Clone {
+pub struct ReferencingWalkback<'record, Iter> where Iter: Iterator {
   backtracker: &'record BacktrackingRecorder<Iter>,
   reverse_position: usize,
 }
 
 impl<'record, Iter> ReferencingWalkback<'record, Iter> 
-  where Iter: Iterator, Iter::Item: Clone {
+  where Iter: Iterator, Iter::Item: 'record {
   fn new<'history>(backtracker: &'history ReferencingBacktrackingIterator<'record, Iter>) -> Self where 'history : 'record {
     let history_len = backtracker.recorder.backtracking_vec.len();
     ReferencingWalkback {
@@ -155,7 +140,7 @@ impl<'record, Iter> ReferencingWalkback<'record, Iter>
 use super::Walkback;
 
 impl<'history, 'record, Iter> Walkback<'history> for ReferencingWalkback<'record, Iter>
-  where Iter: Iterator, Iter::Item: Clone, 'history : 'record {
+  where Iter: Iterator, 'history : 'record {
   type RefPoint = usize;
 
   fn get_ref_point(&self) -> usize {
@@ -164,7 +149,7 @@ impl<'history, 'record, Iter> Walkback<'history> for ReferencingWalkback<'record
 }
 
 impl<'history, 'record, Iter> Iterator for ReferencingWalkback<'record, Iter> 
-  where Iter: Iterator, Iter::Item: Clone, 'history : 'record {
+  where Iter: Iterator, Iter::Item: 'record, 'history : 'record {
   type Item = &'record Iter::Item;
 
   fn next(&mut self) -> Option<Self::Item> {
