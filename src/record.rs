@@ -19,7 +19,8 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use super::{BacktrackingState, ReferencingBacktrackingIterator, CopyingBacktrackingIterator};
+use super::{BacktrackingState, Record, ReferencingBacktrackingIterator, CopyingBacktrackingIterator};
+use self::BacktrackingState::{Progressing, Backtracking};
 
 pub struct BacktrackingRecorder<Iter> where Iter: Iterator {
   pub(crate) iterator: Iter,
@@ -33,7 +34,7 @@ impl<Iter> BacktrackingRecorder<Iter> where Iter: Iterator {
     BacktrackingRecorder {
       iterator,
       backtracking_vec: vec![],
-      state: BacktrackingState::Progressing,
+      state: Progressing,
     }
   }
 
@@ -46,3 +47,26 @@ impl<Iter> BacktrackingRecorder<Iter> where Iter: Iterator {
   }
 }
 
+impl<Iter> Record for BacktrackingRecorder<Iter> where Iter: Iterator {
+  type RefPoint = usize;
+  
+  fn get_ref_point(&self) -> usize {
+    match self.state {
+        Progressing => self.backtracking_vec.len(),
+        Backtracking { position } => position,
+    }
+  }
+
+  fn forget_before(&mut self, position: usize) {
+    if position <= self.backtracking_vec.len() {
+      //Split the history at the given point
+      let kept = self.backtracking_vec.split_off(position);
+      //Keep the second half
+      self.backtracking_vec = kept;
+    }
+  }
+
+  fn forget(&mut self) {
+    self.backtracking_vec.clear();
+  }
+}

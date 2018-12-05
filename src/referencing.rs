@@ -94,19 +94,6 @@ impl<'record, Iter> BacktrackingIterator for ReferencingBacktrackingIterator<'re
   fn backtrack(&mut self, position: usize) {
     self.recorder.state = Backtracking { position };
   }
-
-  fn forget_before(&mut self, position: usize) {
-    if position <= self.recorder.backtracking_vec.len() {
-      //Split the history at the given point
-      let kept = self.recorder.backtracking_vec.split_off(position);
-      //Keep the second half
-      self.recorder.backtracking_vec = kept;
-    }
-  }
-
-  fn forget(&mut self) {
-    self.recorder.backtracking_vec.clear();
-  }
 }
 
 use super::Walkbackable;

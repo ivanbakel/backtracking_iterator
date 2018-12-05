@@ -19,6 +19,44 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+pub trait Record {
+  /// The type used to refer to positions in the history
+  type RefPoint;
+  
+  /// Yield a reference to the current point in the history
+  /// This reference must be valid for as long as the current
+  /// point remains in the history
+  fn get_ref_point(&self) -> Self::RefPoint;
+
+  /// Eliminate all the values before the given reference point from the history
+  fn forget_before(&mut self, point: Self::RefPoint);
+
+  /// Forget all the values before the current position in the iterator
+  /// ```
+  /// extern crate backtracking_iterator;
+  /// use backtracking_iterator::{Record, BacktrackingIterator};
+  ///
+  /// let v = vec![1_u8, 2_u8];
+  /// let mut rec = backtracking_iterator::BacktrackingRecorder::new(v.into_iter());
+  /// {
+  ///   let mut bt = rec.copying();
+  ///   bt.next();
+  /// }
+  ///
+  /// //Before we call this, 1_u8 is in the history
+  /// rec.forget();
+  ///
+  /// {
+  ///   let mut bt = rec.copying();
+  ///   assert!(bt.next().unwrap() == 2_u8);
+  /// }
+  /// ```
+  fn forget(&mut self) {
+    let now = self.get_ref_point();
+    self.forget_before(now);
+  }
+}
+
 /// A trait for defining backtracking behaviour over
 /// This serves to generify the copying and non-copying verions and their behaviour
 pub trait BacktrackingIterator: Iterator {
@@ -72,30 +110,6 @@ pub trait BacktrackingIterator: Iterator {
   fn start_again(&mut self) {
     let oldest = self.get_oldest_point();
     self.backtrack(oldest);
-  }
-
-  /// Eliminate all the values before the given reference point from the history
-  fn forget_before(&mut self, point: Self::RefPoint);
-
-  /// Forget all the values before the current position in the iterator
-  /// ```
-  /// extern crate backtracking_iterator;
-  /// use backtracking_iterator::BacktrackingIterator;
-  ///
-  /// let v = vec![1_u8, 2_u8];
-  /// let mut rec = backtracking_iterator::BacktrackingRecorder::new(v.into_iter());
-  /// let mut bt = rec.copying();
-  /// bt.next();
-  ///
-  /// //Before we call this, 1_u8 is in the history
-  /// bt.forget();
-  ///
-  /// bt.start_again();
-  /// assert!(bt.next().unwrap() == 2_u8);
-  /// ```
-  fn forget(&mut self) {
-    let now = self.get_ref_point();
-    self.forget_before(now);
   }
 }
 

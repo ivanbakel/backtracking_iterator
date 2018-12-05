@@ -51,29 +51,34 @@ pub use self::referencing::*;
 mod tests {
   #[test]
   fn basic_test() {
-    use crate::{BacktrackingIterator};
+    use crate::{Record, BacktrackingIterator};
 
     let num_vec = vec![1_u8, 2, 3, 4, 5, 6];
     let vec_iter = num_vec.into_iter();
     let mut bt_rec = crate::BacktrackingRecorder::new(vec_iter);
-    let mut bt_iter = bt_rec.copying();
-    assert!(bt_iter.next().unwrap() == 1_u8);
-    assert!(bt_iter.next().unwrap() == 2_u8);
+    {
+      let mut bt_iter = bt_rec.copying();
+      assert!(bt_iter.next().unwrap() == 1_u8);
+      assert!(bt_iter.next().unwrap() == 2_u8);
 
-    bt_iter.start_again();
-    assert!(bt_iter.next().unwrap() == 1_u8);
-    assert!(bt_iter.next().unwrap() == 2_u8);
+      bt_iter.start_again();
+      assert!(bt_iter.next().unwrap() == 1_u8);
+      assert!(bt_iter.next().unwrap() == 2_u8);
+    }
 
-    bt_iter.forget();
-    bt_iter.start_again();
-    assert!(bt_iter.next().unwrap() == 3_u8);
-    assert!(bt_iter.next().unwrap() == 4_u8);
-    assert!(bt_iter.next().unwrap() == 5_u8);
-    assert!(bt_iter.next().unwrap() == 6_u8);
-    assert!(!bt_iter.next().is_some());
+    bt_rec.forget();
 
-    bt_iter.start_again();
-    assert!(bt_iter.next().unwrap() == 3_u8);
+    {
+      let mut bt_iter = bt_rec.copying();
+      assert!(bt_iter.next().unwrap() == 3_u8);
+      assert!(bt_iter.next().unwrap() == 4_u8);
+      assert!(bt_iter.next().unwrap() == 5_u8);
+      assert!(bt_iter.next().unwrap() == 6_u8);
+      assert!(!bt_iter.next().is_some());
+
+      bt_iter.start_again();
+      assert!(bt_iter.next().unwrap() == 3_u8);
+    }
   }
 
   #[test]
