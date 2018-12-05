@@ -48,6 +48,61 @@ impl<Iter> BacktrackingRecorder<Iter> where Iter: Iterator {
   pub fn copying<'record>(&'record mut self) -> CopyingBacktrackingIterator<'record, Iter> where Iter::Item: Clone {
     CopyingBacktrackingIterator::new(self)
   }
+
+  /// Take all items out of the history.
+  /// ```
+  /// extern crate backtracking_iterator;
+  /// use backtracking_iterator::{BacktrackingIterator, BacktrackingRecorder};
+  ///
+  /// let vec_iter = vec![1_u8, 2, 3].into_iter();
+  /// let mut rec = BacktrackingRecorder::new(vec_iter);
+  ///
+  /// {
+  ///   let mut bt_ref = rec.referencing();
+  ///   bt_ref.next(); // 1_u8
+  /// }
+  ///
+  /// let mut history = rec.drain_history().into_iter();
+  /// // Repeats only what was in the history
+  /// assert!(history.next().unwrap() == 1_u8);
+  /// assert!(history.next().is_none());
+  /// ```
+  pub fn drain_history(&mut self) -> Vec<Iter::Item> {
+    // What happes when a `Drain` iterator is leaked is not defined
+    // so to guard, we collect it into a vec before returning
+    self.backtracking_vec.drain(..).collect()
+  }
+}
+
+impl<Iter, Item> IntoIterator for BacktrackingRecorder<Iter> where Iter: Iterator<Item=Item> + IntoIterator<Item=Item> {
+  type Item = Item;
+  type IntoIter = std::iter::Chain<std::vec::IntoIter<Item>, Iter::IntoIter>;
+
+  /// Destroy the record and return an iterator which starts from the beginning
+  /// of the history and chains into the originally-given iterator
+  /// ```
+  /// extern crate backtracking_iterator;
+  /// use backtracking_iterator::{BacktrackingIterator, BacktrackingRecorder};
+  ///
+  /// let vec_iter = vec![1_u8, 2, 3].into_iter();
+  /// let mut rec = BacktrackingRecorder::new(vec_iter);
+  ///
+  /// {
+  ///   let mut bt_ref = rec.referencing();
+  ///   bt_ref.next(); // 1_u8
+  /// }
+  ///
+  /// let mut rec_iter = rec.into_iter();
+  /// // Repeats the value in the history
+  /// assert!(rec_iter.next().unwrap() == 1_u8);
+  /// // And follows up with the ones not yet recorded
+  /// assert!(rec_iter.next().unwrap() == 2_u8);
+  /// assert!(rec_iter.next().unwrap() == 3_u8);
+  /// assert!(rec_iter.next().is_none());
+  /// ```
+  fn into_iter(self) -> Self::IntoIter {
+    self.backtracking_vec.into_iter().chain(self.iterator)
+  }
 }
 
 impl<Iter> Record for BacktrackingRecorder<Iter> where Iter: Iterator {
