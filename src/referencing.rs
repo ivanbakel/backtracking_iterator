@@ -22,6 +22,8 @@
 use super::BacktrackingRecorder;
 use super::BacktrackingState::*;
 
+/// An iterator over a historical record which produces references to historical
+/// elements
 pub struct ReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator {
   recorder: &'record mut BacktrackingRecorder<Iter>,
 }
@@ -41,7 +43,9 @@ impl<'record, Iter> Iterator for ReferencingBacktrackingIterator<'record, Iter> 
     /// Produce a borrow on the vec which should be valid
     /// We borrow the vec for the lifetime of 'record, so we should
     /// be able to produce a reference for the lifetime of 'record,
-    /// so long as we never remove items from the vec
+    /// so long as we never remove items from the vec - which only
+    /// happens with a `forget`, which requires a mutable borrow on
+    /// the parent `Record`, which we already hold!
     macro_rules! unsafe_backtracking_index {
       ($index:expr) => {
         unsafe {
@@ -108,6 +112,8 @@ impl<'history, 'record, Iter: 'history> Walkbackable<'history> for ReferencingBa
   }
 }
 
+/// A backwalk through a `ReferencingBacktrackingIterator`'s history. Yields references to
+/// items in the history, and can be used to walk back to a desired point.
 pub struct ReferencingWalkback<'record, Iter> where Iter: Iterator {
   backtracker: &'record BacktrackingRecorder<Iter>,
   reverse_position: usize,

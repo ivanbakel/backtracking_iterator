@@ -22,7 +22,8 @@
 use super::BacktrackingRecorder;
 use super::BacktrackingState::*;
 
-/// A wrapper around an existing iterator to extend it with backtracking functionality
+/// An iterator over a historical record which produces memory clones of historical
+/// elements
 pub struct CopyingBacktrackingIterator<'record, I> where I: Iterator, I::Item: Clone {
   recorder: &'record mut BacktrackingRecorder<I>,
 }
@@ -60,7 +61,6 @@ impl<'record, I> Iterator for CopyingBacktrackingIterator<'record, I> where I: I
 }
 
 impl<'record, I> CopyingBacktrackingIterator<'record, I> where I:Iterator, I::Item: Clone {
-  /// Create a `CopyingBacktrackingIterator` from an existing iterator.
   pub(crate) fn new(recorder: &'record mut BacktrackingRecorder<I>) -> Self {
     CopyingBacktrackingIterator {
       recorder,
@@ -103,11 +103,8 @@ impl<'history, 'record, I: 'history> Walkbackable<'history> for CopyingBacktrack
   }
 }
 
-/// A backwalk through a `BacktrackingIterator`'s history. Yields references
-/// to items in the history, and can be used to walk back to a desired point.
-/// The current position is before the most-recently-yielded element. To restart
-/// a `BacktrackingIterator` at the current position of the backwalk, use the
-/// `history_position()` method.
+/// A backwalk through a `CopyingBacktrackingIterator`'s history. Yields items in 
+/// the history, and can be used to walk back to a desired point.
 pub struct CopyingWalkback<'record, I> where I: Iterator, I::Item: Clone {
   backtracker: &'record BacktrackingRecorder<I>,
   reverse_position: usize,

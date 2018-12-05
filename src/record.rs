@@ -22,6 +22,9 @@
 use super::{BacktrackingState, Record, ReferencingBacktrackingIterator, CopyingBacktrackingIterator};
 use self::BacktrackingState::{Progressing, Backtracking};
 
+/// A wrapper around an existing iterator to give it a historical representation
+/// with the ability to then produce copying and referencing backtracking iterators
+/// on the history
 pub struct BacktrackingRecorder<Iter> where Iter: Iterator {
   pub(crate) iterator: Iter,
   pub(crate) backtracking_vec: Vec<Iter::Item>,

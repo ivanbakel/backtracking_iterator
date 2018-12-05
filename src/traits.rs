@@ -19,6 +19,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+/// A historical record representation
 pub trait Record {
   /// The type used to refer to positions in the history
   type RefPoint;
@@ -57,8 +58,8 @@ pub trait Record {
   }
 }
 
-/// A trait for defining backtracking behaviour over
-/// This serves to generify the copying and non-copying verions and their behaviour
+/// An iterator capable of backtracking behaviour
+/// This generifies the copying and non-copying versions and their behaviour
 pub trait BacktrackingIterator: Iterator {
   /// The type used to refer to positions in the history
   type RefPoint;
@@ -90,6 +91,7 @@ pub trait BacktrackingIterator: Iterator {
   /// 
   /// bt.backtrack(wb_pos);
   /// assert!(bt.next().unwrap() == 2_u8);
+  /// ```
   fn backtrack(&mut self, point: Self::RefPoint);
 
   /// Start the iterator again from all the elements in the current history
@@ -113,11 +115,13 @@ pub trait BacktrackingIterator: Iterator {
   }
 }
 
-/// A trait for an iterator that can be walked back on, parameterised for a lifetime
+/// An iterator that can be walked back on, parameterised for a lifetime
 /// This trait is a workaround for the lack of generic associated types - it is expected
 /// to be implemented `for` every lifetime, for reasons of utility
 pub trait Walkbackable<'history> {
+  /// The type used to refer to positions in the history
   type RefPoint;
+  /// The type of item in the history
   type Item;
 
   /// The type of the walk-back iterator 
@@ -141,14 +145,15 @@ pub trait Walkbackable<'history> {
   fn walk_back(&'history self) -> Self::Walkback;
 }
 
-/// A trait for walking back over a backtracking history
+/// An iterator which walks back over a history
 pub trait Walkback<'history>: Iterator {
   /// The type used to refer to positions in the history
   type RefPoint;
 
-  /// Yield a reference to the current point in the history
+  /// Yield a reference to the current point in the history -
+  /// the current position is before the most-recently-yielded element.
   /// This reference must be valid in the parent BacktrackingIterator,
-  /// and must remain valid until the next call to `next()` on this iterator
+  /// and must remain valid for as long as the walkback exists
   fn get_ref_point(&self) -> Self::RefPoint;
 }
 
