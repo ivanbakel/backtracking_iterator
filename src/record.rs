@@ -37,7 +37,7 @@ impl<Iter> BacktrackingRecorder<Iter> where Iter: Iterator {
     }
   }
 
-  pub fn referecing<'record>(&'record mut self) -> ReferencingBacktrackingIterator<'record, Iter> {
+  pub fn referencing<'record>(&'record mut self) -> ReferencingBacktrackingIterator<'record, Iter> {
     ReferencingBacktrackingIterator::new(self)
   }
 
