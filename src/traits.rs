@@ -113,6 +113,29 @@ pub trait BacktrackingIterator: Iterator {
     let oldest = self.get_oldest_point();
     self.backtrack(oldest);
   }
+
+  /// Get the next element of the iterator, without advancing it.
+  /// The iterator will yield the same element again in the next call to
+  /// `peek()` or `next()`.
+  ///
+  /// ```
+  /// extern crate backtracking_iterator;
+  /// use backtracking_iterator::BacktrackingIterator;
+  ///
+  /// let v = vec![1_u8, 2_u8];
+  /// let mut rec = backtracking_iterator::BacktrackingRecorder::new(v.into_iter());
+  /// let mut bt = rec.copying();
+  /// assert!(bt.peek().unwrap() == 1_u8);
+  /// assert!(bt.peek().unwrap() == 1_u8);
+  /// assert!(bt.peek().unwrap() == 1_u8);
+  /// assert!(bt.next().unwrap() == 1_u8);
+  /// ```
+  fn peek(&mut self) -> Option<Self::Item> {
+    let current = self.get_ref_point();
+    let next = self.next();
+    self.backtrack(current);
+    next
+  }
 }
 
 /// An iterator that can be walked back on, parameterised for a lifetime
