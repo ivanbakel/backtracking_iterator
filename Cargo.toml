@@ -15,3 +15,6 @@ repository = "https://github.com/ivanbakel/backtracking_iterator"
 [badges]
 maintenance = { status = "actively-developed" }
 
+[features]
+slice = []
+

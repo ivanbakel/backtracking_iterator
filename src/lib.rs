@@ -19,6 +19,9 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+// A submodule requires this feature - it is explained later 
+#![cfg_attr(feature = "slice", feature(slice_index_methods))]
+
 /// Module where trait behaviour is defined
 mod traits;
 pub use self::traits::*;
@@ -46,6 +49,11 @@ pub use self::copying::*;
 
 mod referencing;
 pub use self::referencing::*;
+
+#[cfg(feature = "slice")]
+mod slice;
+#[cfg(feature = "slice")]
+pub use self::slice::*;
 
 #[cfg(test)]
 mod tests {
