@@ -26,6 +26,10 @@
 mod traits;
 pub use self::traits::*;
 
+#[macro_use]
+mod sliceable;
+pub use self::sliceable::*;
+
 /// An internal enum for representing history
 pub(crate) enum BacktrackingState {
   /// There may be some values in the history, but we're taking values off the iterator

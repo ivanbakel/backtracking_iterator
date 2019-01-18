@@ -81,3 +81,37 @@ impl<'slice, Slice: ?Sized> BacktrackingIterator for BacktrackingSlice<'slice, S
   }
 }
 
+use std::ops::{RangeBounds, Range, RangeFull, RangeFrom, RangeInclusive, RangeTo, RangeToInclusive};
+
+use crate::sliceable::SliceableIterator;
+
+impl<'slice, Slice: ?Sized> SliceableIterator for BacktrackingSlice<'slice, Slice> where 
+  usize: SliceIndex<Slice>, 
+  Range<usize>: SliceIndex<Slice, Output=Slice>, 
+  RangeFull: SliceIndex<Slice, Output=Slice>,
+  RangeFrom<usize>: SliceIndex<Slice, Output=Slice>,
+  RangeInclusive<usize>: SliceIndex<Slice, Output=Slice>,
+  RangeTo<usize>: SliceIndex<Slice, Output=Slice>,
+  RangeToInclusive<usize>: SliceIndex<Slice, Output=Slice>,
+{
+  type Slice = Slice;
+
+  fn slice(&self, range: impl RangeBounds<usize>) -> Option<&Slice> {
+    use std::ops::Bound::*;
+
+    match (range.start_bound(), range.end_bound()) {
+      (Unbounded, Unbounded) => (..).get(self.slice),
+      (Unbounded, Included(&end)) => (..=end).get(self.slice),
+      (Unbounded, Excluded(&end)) => (..end).get(self.slice),
+      (Included(&start), Unbounded) => (start..).get(self.slice),
+      (Excluded(&start), Unbounded) => ((start+1)..).get(self.slice),
+      (Included(&start), Included(&end)) => (start..=end).get(self.slice),
+      (Included(&start), Excluded(&end)) => (start..end).get(self.slice),
+      (Excluded(&start), Included(&end)) => (start+1..=end).get(self.slice),
+      (Excluded(&start), Excluded(&end)) => (start+1..end).get(self.slice),
+    }
+  }
+}
+
+sliceable_indexing!(<'slice, Slice>, BacktrackingSlice<'slice, Slice>);
+
