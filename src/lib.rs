@@ -31,6 +31,7 @@ mod sliceable;
 pub use self::sliceable::*;
 
 /// An internal enum for representing history
+#[derive(Clone)]
 pub(crate) enum BacktrackingState {
   /// There may be some values in the history, but we're taking values off the iterator
   Progressing,
@@ -54,10 +55,15 @@ pub use self::copying::*;
 mod referencing;
 pub use self::referencing::*;
 
+pub mod concurrent;
+
 #[cfg(feature = "slice")]
 mod slice;
 #[cfg(feature = "slice")]
 pub use self::slice::*;
+
+#[cfg(test)]
+extern crate matches;
 
 #[cfg(test)]
 mod tests {
