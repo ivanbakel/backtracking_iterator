@@ -20,63 +20,42 @@
  */
 
 use super::{BacktrackingState};
+use super::BacktrackingState::*;
 
-use std::sync::{RwLock, Mutex};
+use std::sync::{Arc, RwLock, Mutex};
 
 static EXPECT_RW: &'static str = "The read-write lock on the history has been poisoned by a thread panic!";
 static EXPECT_MUTEX: &'static str = "The mutual exclusion lock on the iterator has been poisoned by a thread panic!"; 
 
-pub struct ConcurrentBacktrackingRecorder<Iter> where Iter: Iterator {
-  pub(crate) iterator: Mutex<Iter>,
-  pub(crate) backtracking_vec: RwLock<Vec<Iter::Item>>,
-}
 
-impl<Iter> ConcurrentBacktrackingRecorder<Iter> where Iter: Iterator {
-  /// Create a `ConcurrentBacktrackingRecorder` from an existing iterator.
-  pub fn new(iterator: Iter) -> Self {
-    ConcurrentBacktrackingRecorder {
-      iterator: Mutex::new(iterator),
-      backtracking_vec: RwLock::new(vec![]),
-    }
-  }
-
-  pub fn referencing<'record>(&'record self) -> ConcurrentReferencingBacktrackingIterator<'record, Iter> {
-    ConcurrentReferencingBacktrackingIterator::new(self)
-  }
-
-  /// Take all items out of the history.
-  pub fn drain_history(&self) -> Vec<Iter::Item> {
-    // What happes when a `Drain` iterator is leaked is not defined
-    // so to guard, we collect it into a vec before returning
-    self.backtracking_vec.write().expect(EXPECT_RW).drain(..).collect()
-  }
-}
-
-use super::BacktrackingState::*;
-
-#[derive(Clone)]
-pub struct ConcurrentReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator {
-  recorder: &'record ConcurrentBacktrackingRecorder<Iter>,
-  state: BacktrackingState,
-}
-
-impl<'record, Iter> ConcurrentReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator {
-  pub(crate) fn new(recorder: &'record ConcurrentBacktrackingRecorder<Iter>) -> Self {
+impl<'item, Iter> From<Iter> for ConcurrentReferencingBacktrackingIterator<'item, Iter> where Iter: Iterator, Iter: 'item {
+  /// Create a `ConcurrentReferencingBacktrackingIterator` from an existing iterator.
+  fn from(iterator: Iter) -> Self {
     ConcurrentReferencingBacktrackingIterator {
-      recorder,
+      item_marker: std::marker::PhantomData,
+      iterator: Arc::new(Mutex::new(iterator)),
+      backtracking_vec: Arc::new(RwLock::new(vec![])),
       state: Progressing,
     }
   }
 }
 
-impl<'record, Iter> Iterator for ConcurrentReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator, Iter::Item: 'record {
-  type Item = &'record Iter::Item;
+#[derive(Clone)]
+pub struct ConcurrentReferencingBacktrackingIterator<'item, Iter> where Iter: Iterator, Iter: 'item {
+  item_marker: std::marker::PhantomData<&'item Iter::Item>,
+  iterator: Arc<Mutex<Iter>>,
+  backtracking_vec: Arc<RwLock<Vec<Iter::Item>>>,
+  state: BacktrackingState,
+}
 
-  fn next(&mut self) -> Option<&'record Iter::Item> {
+impl<'item, Iter> Iterator for ConcurrentReferencingBacktrackingIterator<'item, Iter> where Iter: Iterator, Iter: 'item {
+  type Item = &'item Iter::Item;
+
+  fn next(&mut self) -> Option<&'item Iter::Item> {
     macro_rules! unsafe_backtracking_index {
       ($index:expr) => {
         unsafe {
-          &*(&self.recorder.backtracking_vec.read().expect(EXPECT_RW)[$index] as *const Iter::Item)
+          &*(&self.backtracking_vec.read().expect(EXPECT_RW)[$index] as *const Iter::Item)
         }
       };
     }
@@ -84,15 +63,15 @@ impl<'record, Iter> Iterator for ConcurrentReferencingBacktrackingIterator<'reco
     use crate::{Backtracking, Progressing};
     match self.state {
       Progressing => {
-        if let Some(val) = self.recorder.iterator.lock().expect(EXPECT_MUTEX).next() {
-          self.recorder.backtracking_vec.write().expect(EXPECT_RW).push(val);
-          Some(unsafe_backtracking_index!(self.recorder.backtracking_vec.read().expect(EXPECT_RW).len() - 1))
+        if let Some(val) = self.iterator.lock().expect(EXPECT_MUTEX).next() {
+          self.backtracking_vec.write().expect(EXPECT_RW).push(val);
+          Some(unsafe_backtracking_index!(self.backtracking_vec.read().expect(EXPECT_RW).len() - 1))
         } else {
           None
         }
       },
       Backtracking { position } => {
-        if position >= self.recorder.backtracking_vec.read().expect(EXPECT_RW).len() {
+        if position >= self.backtracking_vec.read().expect(EXPECT_RW).len() {
           self.state = Progressing;
           self.next()
         } else {
@@ -107,12 +86,12 @@ impl<'record, Iter> Iterator for ConcurrentReferencingBacktrackingIterator<'reco
 
 use super::BacktrackingIterator;
 
-impl<'record, Iter> BacktrackingIterator for ConcurrentReferencingBacktrackingIterator<'record, Iter> where Iter: Iterator {
+impl<'item, Iter> BacktrackingIterator for ConcurrentReferencingBacktrackingIterator<'item, Iter> where Iter: Iterator, Iter: 'item {
   type RefPoint = usize;
 
   fn get_ref_point(&self) -> usize {
     match self.state {
-        Progressing => self.recorder.backtracking_vec.read().expect(EXPECT_RW).len(),
+        Progressing => self.backtracking_vec.read().expect(EXPECT_RW).len(),
         Backtracking { position } => position,
     }
   }
@@ -133,10 +112,10 @@ mod tests {
   fn many_iter_test() {
     use matches::{matches};
 
-    let bt_con_rec = crate::concurrent::ConcurrentBacktrackingRecorder::new(1..1000);
+    let bt_con_iter = crate::concurrent::ConcurrentReferencingBacktrackingIterator::from(1..1000);
     
     for _ in 1..100 {
-      let mut bt_iter = bt_con_rec.referencing();
+      let mut bt_iter = bt_con_iter.clone();
       for expected in 1..1000 {
         matches!(bt_iter.next(), Some(&i) if i == expected);
       }
