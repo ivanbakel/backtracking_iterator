@@ -20,7 +20,6 @@
  */
 
 use super::{BacktrackingState};
-use super::BacktrackingState::*;
 
 use std::sync::{Arc, RwLock, Mutex};
 
@@ -35,17 +34,27 @@ impl<'item, Iter> From<Iter> for ConcurrentReferencingBacktrackingIterator<'item
       item_marker: std::marker::PhantomData,
       iterator: Arc::new(Mutex::new(iterator)),
       backtracking_vec: Arc::new(RwLock::new(vec![])),
-      state: Progressing,
+      position: 0,
     }
   }
 }
 
-#[derive(Clone)]
 pub struct ConcurrentReferencingBacktrackingIterator<'item, Iter> where Iter: Iterator, Iter: 'item {
   item_marker: std::marker::PhantomData<&'item Iter::Item>,
   iterator: Arc<Mutex<Iter>>,
   backtracking_vec: Arc<RwLock<Vec<Iter::Item>>>,
-  state: BacktrackingState,
+  position: usize,
+}
+
+impl<'item, Iter> Clone for ConcurrentReferencingBacktrackingIterator<'item, Iter> where Iter: Iterator, Iter: 'item {
+  fn clone(&self) -> Self {
+    ConcurrentReferencingBacktrackingIterator {
+      item_marker: std::marker::PhantomData,
+      iterator: self.iterator.clone(),
+      backtracking_vec: self.backtracking_vec.clone(),
+      position: self.position,
+    }
+  }
 }
 
 impl<'item, Iter> Iterator for ConcurrentReferencingBacktrackingIterator<'item, Iter> where Iter: Iterator, Iter: 'item {
@@ -61,25 +70,18 @@ impl<'item, Iter> Iterator for ConcurrentReferencingBacktrackingIterator<'item, 
     }
 
     use crate::{Backtracking, Progressing};
-    match self.state {
-      Progressing => {
-        if let Some(val) = self.iterator.lock().expect(EXPECT_MUTEX).next() {
-          self.backtracking_vec.write().expect(EXPECT_RW).push(val);
-          Some(unsafe_backtracking_index!(self.backtracking_vec.read().expect(EXPECT_RW).len() - 1))
-        } else {
-          None
-        }
-      },
-      Backtracking { position } => {
-        if position >= self.backtracking_vec.read().expect(EXPECT_RW).len() {
-          self.state = Progressing;
-          self.next()
-        } else {
-          let new_position = position + 1;
-          self.state = Backtracking { position: new_position };
-          Some(unsafe_backtracking_index!(position))
-        }
-      },
+    if self.position >= self.backtracking_vec.read().expect(EXPECT_RW).len() {
+      if let Some(val) = self.iterator.lock().expect(EXPECT_MUTEX).next() {
+        self.backtracking_vec.write().expect(EXPECT_RW).push(val);
+        self.position = self.position + 1;
+        Some(unsafe_backtracking_index!(self.backtracking_vec.read().expect(EXPECT_RW).len() - 1))
+      } else {
+        None
+      }
+    } else {
+      let old_position = self.position;
+      self.position = self.position + 1;
+      Some(unsafe_backtracking_index!(old_position))
     }
   }
 }
@@ -90,10 +92,7 @@ impl<'item, Iter> BacktrackingIterator for ConcurrentReferencingBacktrackingIter
   type RefPoint = usize;
 
   fn get_ref_point(&self) -> usize {
-    match self.state {
-        Progressing => self.backtracking_vec.read().expect(EXPECT_RW).len(),
-        Backtracking { position } => position,
-    }
+    self.position
   }
 
   fn get_oldest_point(&self) -> usize {
@@ -102,7 +101,7 @@ impl<'item, Iter> BacktrackingIterator for ConcurrentReferencingBacktrackingIter
   }
 
   fn backtrack(&mut self, position: usize) {
-    self.state = Backtracking { position };
+    self.position = position;
   }
 }
 
@@ -114,12 +113,23 @@ mod tests {
 
     let bt_con_iter = crate::concurrent::ConcurrentReferencingBacktrackingIterator::from(1..1000);
     
-    for _ in 1..100 {
+    for _ in 1..3 {
       let mut bt_iter = bt_con_iter.clone();
       for expected in 1..1000 {
-        matches!(bt_iter.next(), Some(&i) if i == expected);
+        assert!(matches!(bt_iter.next(), Some(&i) if i == expected))
       }
     }
+  }
+  
+  #[test]
+  fn dont_need_clone_test() {
+    use matches::{matches};
+
+    struct Uncloneable {};
+    let uncloneables = vec![Uncloneable {}];
+    let mut bt_con_iter = crate::concurrent::ConcurrentReferencingBacktrackingIterator::from(uncloneables.into_iter());
+
+    assert!(matches!(bt_con_iter.next(), Some(&Uncloneable {})))
   }
 }
 
