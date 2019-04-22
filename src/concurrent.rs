@@ -19,7 +19,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use super::{BacktrackingState};
+use super::{BacktrackingState, BacktrackingIterator};
 
 use std::sync::{Arc, RwLock, Mutex};
 
@@ -86,8 +86,6 @@ impl<'item, Iter> Iterator for ConcurrentReferencingBacktrackingIterator<'item, 
   }
 }
 
-use super::BacktrackingIterator;
-
 impl<'item, Iter> BacktrackingIterator for ConcurrentReferencingBacktrackingIterator<'item, Iter> where Iter: Iterator, Iter: 'item {
   type RefPoint = usize;
 
@@ -105,6 +103,75 @@ impl<'item, Iter> BacktrackingIterator for ConcurrentReferencingBacktrackingIter
   }
 }
 
+//// COPYING VERSION
+
+impl<Iter> From<Iter> for ConcurrentCopyingBacktrackingIterator<Iter> where Iter: Iterator, Iter::Item: Clone {
+  /// Create a `ConcurrentCopyingBacktrackingIterator` from an existing iterator.
+  fn from(iterator: Iter) -> Self {
+    ConcurrentCopyingBacktrackingIterator {
+      iterator: Arc::new(Mutex::new(iterator)),
+      backtracking_vec: Arc::new(RwLock::new(vec![])),
+      position: 0,
+    }
+  }
+}
+
+pub struct ConcurrentCopyingBacktrackingIterator<Iter> where Iter: Iterator, Iter::Item: Clone {
+  iterator: Arc<Mutex<Iter>>,
+  backtracking_vec: Arc<RwLock<Vec<Iter::Item>>>,
+  position: usize,
+}
+
+impl<Iter> Clone for ConcurrentCopyingBacktrackingIterator<Iter> where Iter: Iterator, Iter::Item: Clone {
+  fn clone(&self) -> Self {
+    ConcurrentCopyingBacktrackingIterator {
+      iterator: self.iterator.clone(),
+      backtracking_vec: self.backtracking_vec.clone(),
+      position: self.position,
+    }
+  }
+}
+
+impl<Iter> Iterator for ConcurrentCopyingBacktrackingIterator<Iter> where Iter: Iterator, Iter::Item: Clone {
+  type Item = Iter::Item;
+
+  fn next(&mut self) -> Option<Iter::Item> {
+    
+    use crate::{Backtracking, Progressing};
+    if self.position >= self.backtracking_vec.read().expect(EXPECT_RW).len() {
+      if let Some(val) = self.iterator.lock().expect(EXPECT_MUTEX).next() {
+        self.backtracking_vec.write().expect(EXPECT_RW).push(val.clone());
+        self.position = self.position + 1;
+        Some(val)
+      } else {
+        None
+      }
+    } else {
+      let old_position = self.position;
+      self.position = self.position + 1;
+      Some(self.backtracking_vec.read().expect(EXPECT_RW)[old_position].clone())
+    }
+  }
+}
+
+impl<Iter> BacktrackingIterator for ConcurrentCopyingBacktrackingIterator<Iter> where Iter: Iterator, Iter::Item: Clone {
+  type RefPoint = usize;
+
+  fn get_ref_point(&self) -> usize {
+    self.position
+  }
+
+  fn get_oldest_point(&self) -> usize {
+    // Always the oldest position
+    0_usize
+  }
+
+  fn backtrack(&mut self, position: usize) {
+    self.position = position;
+  }
+}
+
+
 #[cfg(test)]
 mod tests {
   #[test]
@@ -117,6 +184,20 @@ mod tests {
       let mut bt_iter = bt_con_iter.clone();
       for expected in 1..1000 {
         assert!(matches!(bt_iter.next(), Some(&i) if i == expected))
+      }
+    }
+  }
+  
+  #[test]
+  fn many_iter_clone_test() {
+    use matches::{matches};
+
+    let bt_con_iter = crate::concurrent::ConcurrentCopyingBacktrackingIterator::from(1..1000);
+    
+    for _ in 1..3 {
+      let mut bt_iter = bt_con_iter.clone();
+      for expected in 1..1000 {
+        assert!(matches!(bt_iter.next(), Some(i) if i == expected))
       }
     }
   }
